@@ -1,10 +1,10 @@
 // --- CONFIGURATION ---
-const LATE_THRESHOLD_HOUR = 9;   // 9:00 AM
+const LATE_THRESHOLD_HOUR = 9;   
 const LATE_THRESHOLD_MIN = 0; 
-const MIN_WORK_HOURS = 9;        // Red if duration < 9 hrs
+const MIN_WORK_HOURS = 9;       
 
 // --- STATE MANAGEMENT ---
-let currentId = null;
+let currentStaff = null; // Will hold the full employee object (name, id, photo)
 const activeSessions = {}; 
 
 // 1. Clock
@@ -12,11 +12,25 @@ setInterval(() => {
     document.getElementById('live-clock').innerText = new Date().toLocaleTimeString();
 }, 1000);
 
-// 2. Camera Simulation & Auth
+// 2. Camera & Authentication Logic
 async function startAuth() {
     const idInput = document.getElementById('sid');
-    if(!idInput.value) return alert("Please Enter Staff ID");
-    currentId = idInput.value.toUpperCase();
+    const enteredId = idInput.value.toUpperCase().trim();
+
+    if(!enteredId) return alert("Please Enter Staff ID");
+
+    // --- NEW STEP: LOOKUP IN DATABASE ---
+    // We search the 'employeeDatabase' array from config.js
+    const foundEmployee = employeeDatabase.find(emp => emp.id === enteredId);
+
+    if (!foundEmployee) {
+        alert("ACCESS DENIED: Staff ID not found in system.");
+        idInput.value = ""; // Clear bad input
+        return; 
+    }
+
+    // Store found user for later
+    currentStaff = foundEmployee; 
 
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -26,7 +40,9 @@ async function startAuth() {
         v.classList.remove('opacity-50', 'grayscale');
         document.getElementById('cam-overlay').classList.add('hidden');
         document.getElementById('line').style.display = 'block';
-        document.getElementById('scan-btn').innerText = "SCANNING FACE...";
+        
+        // Show "Verifying: Aruna Devi..."
+        document.getElementById('scan-btn').innerText = `VERIFYING: ${currentStaff.name.toUpperCase()}...`;
         document.getElementById('scan-btn').disabled = true;
 
         setTimeout(() => {
@@ -34,10 +50,13 @@ async function startAuth() {
             document.getElementById('input-ui').classList.add('hidden');
             document.getElementById('action-ui').classList.remove('hidden');
             v.classList.add('opacity-50', 'grayscale');
+            
+            // Optional: Alert success
+            // alert(`Identity Confirmed: ${currentStaff.name}`);
         }, 2000);
 
     } catch (e) {
-        alert("Camera Access Denied. Please enable camera permissions.");
+        alert("Camera Access Denied.");
     }
 }
 
@@ -50,26 +69,35 @@ function processAttendance(type) {
 
     if(emptyState) emptyState.style.display = 'none';
 
+    // Use the Name from the database, not just the ID
+    const displayName = currentStaff ? currentStaff.name : currentId;
+    const displayId = currentStaff ? currentStaff.id : "UNKNOWN";
+
     if (type === 'IN') {
-        if(activeSessions[currentId]) return alert("Staff Member already checked in!");
+        if(activeSessions[displayId]) return alert("You are already clocked in!");
 
         const lateLimit = new Date();
         lateLimit.setHours(LATE_THRESHOLD_HOUR, LATE_THRESHOLD_MIN, 0);
         const isLate = now > lateLimit;
         const timeClass = isLate ? "text-rose-500 font-bold" : "text-emerald-400 font-mono";
         
-        activeSessions[currentId] = now;
+        activeSessions[displayId] = now;
 
         const row = document.createElement('tr');
-        row.id = `row-${currentId}`;
+        row.id = `row-${displayId}`;
         row.className = "hover:bg-slate-800/30 transition-colors group";
+        
+        // ADDED: Show Name in Bold, ID smaller below it
         row.innerHTML = `
-            <td class="p-4 font-bold text-white tracking-wide">${currentId}</td>
+            <td class="p-4">
+                <div class="font-bold text-white">${displayName}</div>
+                <div class="text-[10px] text-slate-500">${displayId}</div>
+            </td>
             <td class="p-4 ${timeClass}">
                 ${timeString} ${isLate ? '<i class="fas fa-exclamation-circle ml-1 text-[10px]"></i>' : ''}
             </td>
-            <td class="p-4 text-slate-600 font-mono" id="out-${currentId}">--:--:--</td>
-            <td class="p-4 text-slate-600 font-mono" id="dur-${currentId}">0h 0m</td>
+            <td class="p-4 text-slate-600 font-mono" id="out-${displayId}">--:--:--</td>
+            <td class="p-4 text-slate-600 font-mono" id="dur-${displayId}">0h 0m</td>
             <td class="p-4 text-right">
                 <span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-1 rounded text-[10px] font-bold">WORKING</span>
             </td>
@@ -77,17 +105,17 @@ function processAttendance(type) {
         table.prepend(row);
 
     } else if (type === 'OUT') {
-        if(!activeSessions[currentId]) return alert("No active Check-In found for this ID!");
+        if(!activeSessions[displayId]) return alert("No active Check-In found for this ID!");
 
-        const startTime = activeSessions[currentId];
+        const startTime = activeSessions[displayId];
         const diffMs = now - startTime;
         
         const diffHrs = Math.floor(diffMs / 3600000);
         const diffMins = Math.floor((diffMs % 3600000) / 60000);
 
-        const outCell = document.getElementById(`out-${currentId}`);
-        const durCell = document.getElementById(`dur-${currentId}`);
-        const row = document.getElementById(`row-${currentId}`);
+        const outCell = document.getElementById(`out-${displayId}`);
+        const durCell = document.getElementById(`dur-${displayId}`);
+        const row = document.getElementById(`row-${displayId}`);
 
         const isShort = diffHrs < MIN_WORK_HOURS;
         const durClass = isShort ? "text-rose-500 font-bold" : "text-emerald-400 font-mono";
@@ -100,7 +128,7 @@ function processAttendance(type) {
         row.lastElementChild.innerHTML = `
             <span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded text-[10px] font-bold">DONE</span>
         `;
-        delete activeSessions[currentId];
+        delete activeSessions[displayId];
     }
     resetSystem();
 }
@@ -119,6 +147,7 @@ function resetSystem() {
         }
         v.srcObject = null;
         document.getElementById('cam-overlay').classList.remove('hidden');
+        currentStaff = null; // Reset user
     }, 1000);
 }
 
