@@ -5,9 +5,9 @@ const MIN_WORK_HOURS = 9;        // Red if duration < 9 hrs
 
 // --- STATE MANAGEMENT ---
 let currentId = null;
-const activeSessions = {}; // Stores Check-In Time objects: { 'GIS-101': DateObj }
+const activeSessions = {}; 
 
-// 1. Clock & Init
+// 1. Clock
 setInterval(() => {
     document.getElementById('live-clock').innerText = new Date().toLocaleTimeString();
 }, 1000);
@@ -19,24 +19,21 @@ async function startAuth() {
     currentId = idInput.value.toUpperCase();
 
     try {
-        // Request Camera
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         const v = document.getElementById('v');
         v.srcObject = stream;
         
-        // UI Effects
         v.classList.remove('opacity-50', 'grayscale');
         document.getElementById('cam-overlay').classList.add('hidden');
         document.getElementById('line').style.display = 'block';
         document.getElementById('scan-btn').innerText = "SCANNING FACE...";
         document.getElementById('scan-btn').disabled = true;
 
-        // Simulate 2s Scan Delay
         setTimeout(() => {
             document.getElementById('line').style.display = 'none';
             document.getElementById('input-ui').classList.add('hidden');
             document.getElementById('action-ui').classList.remove('hidden');
-            v.classList.add('opacity-50', 'grayscale'); // Dim camera after scan
+            v.classList.add('opacity-50', 'grayscale');
         }, 2000);
 
     } catch (e) {
@@ -56,18 +53,13 @@ function processAttendance(type) {
     if (type === 'IN') {
         if(activeSessions[currentId]) return alert("Staff Member already checked in!");
 
-        // Logic: Check for Late Arrival
-        // Creating a simplified date for comparison
         const lateLimit = new Date();
         lateLimit.setHours(LATE_THRESHOLD_HOUR, LATE_THRESHOLD_MIN, 0);
-        
         const isLate = now > lateLimit;
         const timeClass = isLate ? "text-rose-500 font-bold" : "text-emerald-400 font-mono";
         
-        // Store Start Time
         activeSessions[currentId] = now;
 
-        // Create Row
         const row = document.createElement('tr');
         row.id = `row-${currentId}`;
         row.className = "hover:bg-slate-800/30 transition-colors group";
@@ -90,38 +82,29 @@ function processAttendance(type) {
         const startTime = activeSessions[currentId];
         const diffMs = now - startTime;
         
-        // Calculate Duration
-        const diffHrs = Math.floor(diffMs / 3600000); // 1000 * 60 * 60
+        const diffHrs = Math.floor(diffMs / 3600000);
         const diffMins = Math.floor((diffMs % 3600000) / 60000);
 
-        // Update Row Cells
         const outCell = document.getElementById(`out-${currentId}`);
         const durCell = document.getElementById(`dur-${currentId}`);
         const row = document.getElementById(`row-${currentId}`);
 
-        // Check Short Duration Logic
         const isShort = diffHrs < MIN_WORK_HOURS;
         const durClass = isShort ? "text-rose-500 font-bold" : "text-emerald-400 font-mono";
 
         outCell.innerText = timeString;
         outCell.className = "p-4 text-slate-300 font-mono";
-        
         durCell.innerHTML = `${diffHrs}h ${diffMins}m ${isShort ? '<i class="fas fa-clock ml-1 text-[10px]"></i>' : ''}`;
         durCell.className = `p-4 ${durClass}`;
 
-        // Update Status
         row.lastElementChild.innerHTML = `
             <span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded text-[10px] font-bold">DONE</span>
         `;
-
-        // Clear Session
         delete activeSessions[currentId];
     }
-
     resetSystem();
 }
 
-// 4. Reset for Next User
 function resetSystem() {
     setTimeout(() => {
         document.getElementById('action-ui').classList.add('hidden');
@@ -130,20 +113,22 @@ function resetSystem() {
         document.getElementById('scan-btn').innerText = "INITIATE SCAN";
         document.getElementById('scan-btn').disabled = false;
         
-        // Stop camera stream to save battery/resources
         const v = document.getElementById('v');
-        const stream = v.srcObject;
-        if(stream) {
-            const tracks = stream.getTracks();
-            tracks.forEach(track => track.stop());
+        if(v.srcObject) {
+            v.srcObject.getTracks().forEach(track => track.stop());
         }
         v.srcObject = null;
         document.getElementById('cam-overlay').classList.remove('hidden');
-
     }, 1000);
 }
 
 function exportData() {
     alert("Exporting data to .XLSX for Payroll...");
-    // Real implementation would use SheetJS library here
 }
+
+// Press Enter to Scan
+document.getElementById('sid').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+        startAuth();
+    }
+});
