@@ -3,146 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GIS | Biometric Logging System</title>
+    <title>GIS | Advanced Attendance Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+
     <style>
+        /* Custom Animations */
         .scan-line {
-            height: 3px;
+            height: 2px;
             background: #3b82f6;
             box-shadow: 0 0 20px #3b82f6;
             position: absolute;
             width: 100%;
             top: 0;
-            animation: scan 2s ease-in-out infinite;
+            animation: scan 2s linear infinite;
             display: none;
+            z-index: 10;
         }
-        @keyframes scan { 0%, 100% { top: 10%; } 50% { top: 90%; } }
-        .video-box { position: relative; border-radius: 20px; overflow: hidden; background: #000; height: 250px; }
+        @keyframes scan { 0%, 100% { top: 5%; } 50% { top: 95%; } }
+        
+        .video-wrapper {
+            position: relative;
+            border-radius: 1.5rem;
+            overflow: hidden;
+            background: #000;
+            border: 4px solid #1e293b;
+        }
+
+        /* Scrollbar for table */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8">
+<body class="bg-slate-950 text-slate-200 min-h-screen p-6 font-sans">
 
-    <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        <div class="lg:col-span-5 space-y-6">
-            <div class="bg-slate-900 rounded-[2rem] p-6 border border-slate-800 shadow-2xl">
-                <h1 class="text-xl font-black mb-6 text-center tracking-widest text-blue-500">GIS SECURITY</h1>
-                
-                <div class="video-box mb-6">
-                    <video id="v" autoplay playsinline class="w-full h-full object-cover opacity-40 grayscale"></video>
-                    <div id="line" class="scan-line"></div>
+        <div class="lg:col-span-4 space-y-6">
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
+                <div class="text-center mb-6">
+                    <h1 class="text-2xl font-black tracking-widest text-white">GIS <span class="text-blue-500">SECURE</span></h1>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-[0.2em] mt-1">Staff Verification Unit</p>
                 </div>
 
-                <div id="auth-ui">
-                    <input type="text" id="sid" placeholder="ENTER UNIQUE ID" 
-                           class="w-full bg-slate-800 border-none p-4 rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 outline-none text-center font-bold">
-                    <button onclick="startScan()" id="vbtn" class="w-full bg-blue-600 p-4 rounded-xl font-bold hover:bg-blue-500 transition-all">
-                        START FACE SCAN
+                <div class="video-wrapper aspect-[4/3] mb-6">
+                    <video id="v" autoplay playsinline class="w-full h-full object-cover opacity-50 grayscale"></video>
+                    <div id="line" class="scan-line"></div>
+                    <div id="cam-overlay" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <i class="fas fa-camera text-slate-700 text-4xl"></i>
+                    </div>
+                </div>
+
+                <div id="input-ui" class="space-y-4">
+                    <div class="relative">
+                        <i class="fas fa-id-badge absolute left-4 top-4 text-slate-500"></i>
+                        <input type="text" id="sid" placeholder="ENTER STAFF ID" 
+                               class="w-full bg-slate-800 text-white font-bold tracking-widest p-4 pl-12 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder-slate-600 uppercase">
+                    </div>
+                    <button onclick="startAuth()" id="scan-btn" 
+                            class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-900/20 transition-all">
+                        INITIATE SCAN
                     </button>
                 </div>
 
-                <div id="action-ui" class="hidden grid grid-cols-2 gap-4">
-                    <button onclick="record('CLOCK IN')" class="bg-emerald-600 p-4 rounded-xl font-bold">CLOCK IN</button>
-                    <button onclick="record('CLOCK OUT')" class="bg-rose-600 p-4 rounded-xl font-bold">CLOCK OUT</button>
+                <div id="action-ui" class="hidden grid grid-cols-2 gap-3 animate-pulse">
+                    <button onclick="processAttendance('IN')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-900/20">
+                        CHECK IN
+                    </button>
+                    <button onclick="processAttendance('OUT')" class="bg-rose-600 hover:bg-rose-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-rose-900/20">
+                        CHECK OUT
+                    </button>
+                </div>
+
+                <div class="mt-6 text-center border-t border-slate-800 pt-4">
+                    <p class="text-slate-500 text-xs uppercase">Server Time</p>
+                    <p id="live-clock" class="text-xl font-mono text-blue-400 font-bold">00:00:00</p>
                 </div>
             </div>
         </div>
 
-        <div class="lg:col-span-7">
-            <div class="bg-slate-900 rounded-[2rem] p-6 border border-slate-800 shadow-2xl h-full">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-lg font-bold">Live Activity Log</h2>
-                    <span id="current-date" class="text-xs text-slate-500 font-mono"></span>
+        <div class="lg:col-span-8">
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl h-full flex flex-col">
+                <div class="flex justify-between items-end mb-6">
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Daily Attendance Log</h2>
+                        <p class="text-xs text-slate-500 mt-1">Live updates from Nellore Campus</p>
+                    </div>
+                    <button onclick="exportData()" class="text-xs bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg border border-slate-700">
+                        <i class="fas fa-file-excel mr-2"></i>Export Report
+                    </button>
                 </div>
 
-                <div class="overflow-hidden rounded-xl">
-                    <table class="w-full text-left">
-                        <thead class="bg-slate-800 text-slate-400 text-[10px] uppercase tracking-wider">
+                <div class="overflow-hidden rounded-xl border border-slate-800 flex-1 relative">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-950 text-slate-400 text-[11px] uppercase tracking-wider font-semibold">
                             <tr>
-                                <th class="p-4">Staff ID</th>
-                                <th class="p-4">Action</th>
-                                <th class="p-4">Timestamp</th>
-                                <th class="p-4 text-right">Status</th>
+                                <th class="p-4 border-b border-slate-800">Staff ID</th>
+                                <th class="p-4 border-b border-slate-800">Check In</th>
+                                <th class="p-4 border-b border-slate-800">Check Out</th>
+                                <th class="p-4 border-b border-slate-800">Duration</th>
+                                <th class="p-4 border-b border-slate-800 text-right">Status</th>
                             </tr>
                         </thead>
-                        <tbody id="log-table" class="text-sm divide-y divide-slate-800">
+                        <tbody id="log-table" class="text-sm divide-y divide-slate-800/50">
                             </tbody>
                     </table>
-                    <div id="no-data" class="text-center py-10 text-slate-700 italic text-sm">
-                        No activity recorded yet for today.
+                    
+                    <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-slate-600">
+                        <i class="fas fa-clipboard-list text-4xl mb-3 opacity-20"></i>
+                        <p class="text-sm">Ready to record attendance</p>
                     </div>
+                </div>
+
+                <div class="mt-4 flex gap-4 text-[10px] text-slate-500 uppercase tracking-wide">
+                    <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-rose-500 mr-2"></span> Late (>9:00 AM)</span>
+                    <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-rose-500 mr-2"></span> Short Shift (<9 Hrs)</span>
                 </div>
             </div>
         </div>
-
     </div>
 
-    <script>
-        let currentStaffID = "";
-
-        // Set Today's Date
-        document.getElementById('current-date').innerText = new Date().toDateString();
-
-        async function startScan() {
-            const idInput = document.getElementById('sid');
-            if(!idInput.value) return alert("Please enter ID");
-            currentStaffID = idInput.value;
-
-            try {
-                const s = await navigator.mediaDevices.getUserMedia({ video: true });
-                const v = document.getElementById('v');
-                v.srcObject = s;
-                v.classList.remove('grayscale', 'opacity-40');
-                document.getElementById('line').style.display = 'block';
-                document.getElementById('vbtn').innerText = "SCANNING...";
-                document.getElementById('vbtn').disabled = true;
-
-                setTimeout(() => {
-                    document.getElementById('line').style.display = 'none';
-                    document.getElementById('auth-ui').classList.add('hidden');
-                    document.getElementById('action-ui').classList.remove('hidden');
-                    v.classList.add('grayscale', 'opacity-40');
-                }, 2500);
-            } catch (e) { alert("Camera Permission Required"); }
-        }
-
-        function record(actionType) {
-            const table = document.getElementById('log-table');
-            const noData = document.getElementById('no-data');
-            const now = new Date();
-            const time = now.toLocaleTimeString();
-
-            // Remove placeholder
-            if (noData) noData.style.display = 'none';
-
-            // Create Log Row
-            const row = document.createElement('tr');
-            row.className = "hover:bg-slate-800/50 transition-colors animate-pulse";
-            
-            const badgeClass = actionType === 'CLOCK IN' ? 'text-emerald-400' : 'text-rose-400';
-
-            row.innerHTML = `
-                <td class="p-4 font-mono font-bold text-blue-400">${currentStaffID}</td>
-                <td class="p-4 font-bold ${badgeClass}">${actionType}</td>
-                <td class="p-4 text-slate-400 font-mono">${time}</td>
-                <td class="p-4 text-right">
-                    <span class="bg-slate-800 text-slate-400 px-2 py-1 rounded text-[10px]">VERIFIED</span>
-                </td>
-            `;
-
-            table.prepend(row);
-
-            // Reset UI for next user
-            setTimeout(() => {
-                row.classList.remove('animate-pulse');
-                document.getElementById('auth-ui').classList.remove('hidden');
-                document.getElementById('action-ui').classList.add('hidden');
-                document.getElementById('sid').value = "";
-                document.getElementById('vbtn').innerText = "START FACE SCAN";
-                document.getElementById('vbtn').disabled = false;
-            }, 1000);
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
