@@ -1,7 +1,8 @@
 // --- CONFIGURATION ---
-const LATE_THRESHOLD_HOUR = 9;   
-const LATE_THRESHOLD_MIN = 0; 
-const MIN_WORK_HOURS = 9;       
+const LATE_THRESHOLD_HOUR = 8;   
+const LATE_THRESHOLD_MIN = 45; 
+const MIN_WORK_HOURS = 8;
+const MIN_WORK_MINUTES = 30;     
 
 // --- STATE MANAGEMENT ---
 let currentStaff = null; // Will hold the full employee object (name, id, photo)
@@ -117,7 +118,8 @@ function processAttendance(type) {
         const durCell = document.getElementById(`dur-${displayId}`);
         const row = document.getElementById(`row-${displayId}`);
 
-        const isShort = diffHrs < MIN_WORK_HOURS;
+        const minWorkMs = (MIN_WORK_HOURS * 60 + MIN_WORK_MINUTES) * 60 * 1000;
+        const isShort = diffMs < minWorkMs;
         const durClass = isShort ? "text-rose-500 font-bold" : "text-emerald-400 font-mono";
 
         outCell.innerText = timeString;
